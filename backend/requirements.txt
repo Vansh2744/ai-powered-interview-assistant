@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+python-dotenv
+httpx
+PyPDF2
+python-docx
+python-multipart
+chroma
+langchain-chroma>=0.1.2
+langchain
+langchain-groq
+langchain-mistralai
+langchain-text-splitters
