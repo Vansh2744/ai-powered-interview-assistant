@@ -20,13 +20,18 @@ from services.embeddings import get_query_embedding
 from services.vector_store import query_collection
 from routers.interview_ws import router as interview_router
 import json
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 app = FastAPI()
 
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://ai-powered-interview-assistant-beta.vercel.app/"],
+    allow_origins=["http://localhost:3000", frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
