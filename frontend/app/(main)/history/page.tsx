@@ -5,7 +5,7 @@ export default async function HistoryPage() {
   const { getToken } = await auth();
   const token = await getToken();
 
-  const res = await fetch(`${process.env.FASTAPI_URL}/history`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_FASTAPI_URL}/history`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });

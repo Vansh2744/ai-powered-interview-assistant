@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   if (evt.type === "user.created") {
     const { id, email_addresses } = evt.data;
-    await fetch(`${process.env.FASTAPI_URL}/users`, {
+    await fetch(`${process.env.NEXT_PUBLIC_FASTAPI_URL}/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

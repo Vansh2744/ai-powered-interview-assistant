@@ -14,3 +14,4 @@ langchain
 langchain-groq
 langchain-mistralai
 langchain-text-splitters
+gunicorn

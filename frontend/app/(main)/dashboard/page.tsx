@@ -5,7 +5,7 @@ export default async function Dashboard() {
   const { getToken } = await auth();
   const token = await getToken();
 
-  const res = await fetch(`${process.env.FASTAPI_URL}/me`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_FASTAPI_URL}/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`FastAPI returned ${res.status}`);
