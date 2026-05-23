@@ -17,7 +17,6 @@ def get_all_chunks_for_document(collection_name: str, doc_id: str) -> list[str]:
     """Fetch ALL chunks belonging to a specific document — used for question generation."""
     collection = client.get_collection(name=collection_name)
 
-    # Use get() with where filter instead of query() — no embedding needed
     results = collection.get(
         where={"doc_id": doc_id},
         include=["documents", "metadatas"]

@@ -9,7 +9,7 @@ from PyPDF2 import PdfReader
 from docx import Document
 
 from db.base import get_db, Base, engine
-from db.models import User, UploadedFiles
+from db.models import User, UploadedFiles, InterviewSession, InterviewQuestion, InterviewFeedback
 from db.auth import get_current_user
 from services.embeddings import get_embeddings
 from services.chunks import split_text_into_chunks
@@ -19,6 +19,7 @@ from db.schemas import SearchQuery
 from services.embeddings import get_query_embedding
 from services.vector_store import query_collection
 from routers.interview_ws import router as interview_router
+import json
 
 
 app = FastAPI()
@@ -37,7 +38,7 @@ app.include_router(interview_router)
 async def startup():
     try:
         print("[startup] Importing models and creating tables...")
-        Base.metadata.create_all(bind=engine)  # now User model is registered
+        Base.metadata.create_all(bind=engine)
         print("[startup] Tables OK.")
     except Exception as e:
         print(f"[startup] ERROR: {e}")
@@ -101,7 +102,7 @@ def extract_docx_text(upload_file: UploadFile) -> str:
 async def upload_resume(
     file: UploadFile = File(...),
     payload: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),  # add db session
+    db: Session = Depends(get_db),
 ):
     if not file.filename.lower().endswith((".pdf", ".docx")):
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are allowed.")
@@ -117,11 +118,9 @@ async def upload_resume(
     if not text:
         raise HTTPException(status_code=400, detail="No readable text was found in the file.")
 
-    # Split and embed
     chunks = split_text_into_chunks(text)
     embeddings = get_embeddings(chunks)
 
-    # Get or create user-specific collection
     collection_name = f"resumes_{payload['sub']}"
     collection = create_collection(collection_name)
 
@@ -171,6 +170,37 @@ def get_uploaded_files(
         }
         for f in files
     ]
+
+@app.get("/history")
+def get_history(payload: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    sessions = (
+        db.query(InterviewSession)
+        .filter(InterviewSession.user_clerk_id == payload["sub"])
+        .order_by(InterviewSession.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for s in sessions:
+        result.append({
+            "session_id":    s.id,
+            "file_name":     s.file.file_name,
+            "num_questions": s.num_questions,
+            "completed":     s.completed,
+            "created_at":    s.created_at.isoformat(),
+            "questions": [
+                {"index": q.index, "question": q.question, "answer": q.answer}
+                for q in sorted(s.questions, key=lambda x: x.index)
+            ],
+            "feedback": {
+                "overall_score": s.feedback.overall_score,
+                "summary":       s.feedback.summary,
+                "cv_feedback":   s.feedback.cv_feedback,
+                "strengths":     json.loads(s.feedback.strengths or "[]"),
+                "improvements":  json.loads(s.feedback.improvements or "[]"),
+            } if s.feedback else None,
+        })
+    return result
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):

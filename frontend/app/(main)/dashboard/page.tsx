@@ -15,7 +15,6 @@ export default async function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      {/* ── Header ── */}
       <div className="dash-header">
         <div className="dash-header__left">
           <div className="dash-avatar">{initial}</div>

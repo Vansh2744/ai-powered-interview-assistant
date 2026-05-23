@@ -157,6 +157,7 @@ export default function UploadedFilesList({ refetchRef }: Props) {
           <InterviewSession
             key={activeFile.id}
             docId={activeFile.chroma_document_id}
+            fileId={activeFile.id}
             fileName={activeFile.file_name}
             onClose={() => setActiveFile(null)}
           />

@@ -12,4 +12,4 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     return embeddings.embed_documents(texts)
 
 def get_query_embedding(text: str) -> list[float]:
-    return embeddings.embed_query(text)  # single vector, not a list of vectors
+    return embeddings.embed_query(text)

@@ -9,12 +9,20 @@ export type InterviewStatus =
   | "question"
   | "recording"
   | "processing"
+  | "evaluating"
   | "complete"
   | "error";
 
 export interface QAPair {
   question: string;
   answer: string;
+}
+export interface Feedback {
+  overall_score: number;
+  summary: string;
+  cv_feedback: string;
+  strengths: string[];
+  improvements: string[];
 }
 
 interface ExtendedWebSocket extends WebSocket {
@@ -26,35 +34,39 @@ export function useInterview(getToken: () => Promise<string | null>) {
   const ws = useRef<ExtendedWebSocket | null>(null);
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
-  const isStarting = useRef(false); // ✅ prevent concurrent startInterview calls
+  const isStarting = useRef(false);
 
   const [status, setStatus] = useState<InterviewStatus>("idle");
-  const [currentQuestion, setCurrentQuestion] = useState<string>("");
+  const [currentQuestion, setCurrentQuestion] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
-  const [transcript, setTranscript] = useState<string>("");
+  const [transcript, setTranscript] = useState("");
   const [history, setHistory] = useState<QAPair[]>([]);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (ws.current) {
-        ws.current.onmessage = null;
-        ws.current.onclose = null;
-        ws.current.onerror = null;
-        ws.current.close();
-        ws.current = null;
-      }
+      closeWS();
     };
   }, []);
 
-  const playAudio = useCallback(async (audioBytes: ArrayBuffer) => {
-    const audioCtx = new AudioContext();
-    const decoded = await audioCtx.decodeAudioData(audioBytes);
-    const source = audioCtx.createBufferSource();
+  function closeWS() {
+    if (ws.current) {
+      ws.current.onmessage = null;
+      ws.current.onclose = null;
+      ws.current.onerror = null;
+      ws.current.close();
+      ws.current = null;
+    }
+  }
+
+  const playAudio = useCallback(async (bytes: ArrayBuffer) => {
+    const ctx = new AudioContext();
+    const decoded = await ctx.decodeAudioData(bytes);
+    const source = ctx.createBufferSource();
     source.buffer = decoded;
-    source.connect(audioCtx.destination);
+    source.connect(ctx.destination);
     return new Promise<void>((resolve) => {
       source.onended = () => resolve();
       source.start();
@@ -87,20 +99,78 @@ export function useInterview(getToken: () => Promise<string | null>) {
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorder.current?.state === "recording") {
+    if (mediaRecorder.current?.state === "recording")
       mediaRecorder.current.stop();
-    }
   }, []);
 
-  const handleMessage = useCallback(
-    (wsInstance: ExtendedWebSocket) => {
+  const disconnect = useCallback(() => {
+    closeWS();
+    isStarting.current = false;
+    setStatus("idle");
+  }, []);
+
+  const startInterview = useCallback(
+    async (docId: string, fileId: number, numQuestions: number = 5) => {
+      if (isStarting.current) return;
+      isStarting.current = true;
+
+      closeWS();
+      setStatus("connecting");
+      setError(null);
+      setHistory([]);
+      setFeedback(null);
+
+      const freshToken = await getToken();
+      if (!freshToken) {
+        setError("Not authenticated");
+        setStatus("error");
+        isStarting.current = false;
+        return;
+      }
+
+      const wsInstance = new WebSocket(
+        `${WS_BASE}/interview/ws?token=${freshToken}`,
+      ) as ExtendedWebSocket;
+      ws.current = wsInstance;
+      wsInstance._pendingAudioResolver = null;
+
+      wsInstance.onopen = () => {
+        if (ws.current !== wsInstance) {
+          wsInstance.close();
+          return;
+        }
+        wsInstance.send(
+          JSON.stringify({
+            type: "init",
+            doc_id: docId,
+            file_id: fileId,
+            num_questions: numQuestions,
+          }),
+        );
+        isStarting.current = false;
+      };
+
+      wsInstance.onclose = () => {
+        if (ws.current === wsInstance) {
+          setStatus((prev) => (prev !== "complete" ? "idle" : prev));
+          ws.current = null;
+        }
+      };
+
+      wsInstance.onerror = () => {
+        if (ws.current === wsInstance) {
+          setError("WebSocket connection failed.");
+          setStatus("error");
+          isStarting.current = false;
+        }
+      };
+
       wsInstance.onmessage = async (event) => {
-        // ✅ ignore messages from stale/replaced sockets
         if (ws.current !== wsInstance) return;
 
         if (event.data instanceof Blob) {
-          const arrayBuffer = await event.data.arrayBuffer();
-          await playAudio(arrayBuffer);
+          const bytes = await event.data.arrayBuffer();
+          await playAudio(bytes);
           const audioBlob = await recordAnswer();
           wsInstance._pendingAudioResolver?.(audioBlob);
           return;
@@ -122,8 +192,12 @@ export function useInterview(getToken: () => Promise<string | null>) {
           setTranscript(msg.text);
           setStatus("processing");
         }
+        if (msg.type === "evaluating") {
+          setStatus("evaluating");
+        }
         if (msg.type === "complete") {
           setHistory(msg.summary);
+          setFeedback(msg.feedback);
           setStatus("complete");
         }
         if (msg.type === "error") {
@@ -131,100 +205,20 @@ export function useInterview(getToken: () => Promise<string | null>) {
           setStatus("error");
         }
       };
-    },
-    [playAudio, recordAnswer],
-  );
-
-  const disconnect = useCallback(() => {
-    if (ws.current) {
-      ws.current.onmessage = null; // ✅ stop processing messages immediately
-      ws.current.onclose = null; // ✅ don't trigger onclose handler
-      ws.current.onerror = null;
-      ws.current.close();
-      ws.current = null;
-    }
-    isStarting.current = false;
-    setStatus("idle");
-  }, []);
-
-  const startInterview = useCallback(
-    async (docId: string) => {
-      // ✅ prevent double-start
-      if (isStarting.current) {
-        console.log("[WS] Already starting, skipping duplicate call");
-        return;
-      }
-      isStarting.current = true;
-
-      // ✅ close any existing connection first
-      if (ws.current) {
-        ws.current.onmessage = null;
-        ws.current.onclose = null;
-        ws.current.onerror = null;
-        ws.current.close();
-        ws.current = null;
-      }
-
-      setStatus("connecting");
-      setError(null);
-      setHistory([]);
-
-      const freshToken = await getToken();
-      if (!freshToken) {
-        setError("Not authenticated");
-        setStatus("error");
-        isStarting.current = false;
-        return;
-      }
-
-      const wsInstance = new WebSocket(
-        `${WS_BASE}/interview/ws?token=${freshToken}`,
-      ) as ExtendedWebSocket;
-
-      ws.current = wsInstance;
-      wsInstance._pendingAudioResolver = null;
-
-      wsInstance.onopen = () => {
-        // ✅ check this socket is still the current one before proceeding
-        if (ws.current !== wsInstance) {
-          wsInstance.close();
-          return;
-        }
-        console.log("[WS] Connected, sending init with doc_id:", docId);
-        wsInstance.send(JSON.stringify({ type: "init", doc_id: docId }));
-        isStarting.current = false;
-      };
-
-      wsInstance.onclose = () => {
-        if (ws.current === wsInstance) {
-          setStatus((prev) => (prev !== "complete" ? "idle" : prev));
-          ws.current = null;
-        }
-      };
-
-      wsInstance.onerror = () => {
-        if (ws.current === wsInstance) {
-          setError("WebSocket connection failed.");
-          setStatus("error");
-          isStarting.current = false;
-        }
-      };
-
-      handleMessage(wsInstance);
 
       wsInstance._stopAndSend = async () => {
         const blob: Blob = await new Promise((resolve) => {
           wsInstance._pendingAudioResolver = resolve;
           stopRecording();
         });
-        const arrayBuffer = await blob.arrayBuffer();
+        const bytes = await blob.arrayBuffer();
         if (ws.current === wsInstance) {
-          wsInstance.send(arrayBuffer);
+          wsInstance.send(bytes);
           setStatus("processing");
         }
       };
     },
-    [getToken, handleMessage, stopRecording],
+    [getToken, playAudio, recordAnswer, stopRecording],
   );
 
   return {
@@ -234,6 +228,7 @@ export function useInterview(getToken: () => Promise<string | null>) {
     totalQuestions,
     transcript,
     history,
+    feedback,
     error,
     startInterview,
     stopRecording: () => ws.current?._stopAndSend?.(),
