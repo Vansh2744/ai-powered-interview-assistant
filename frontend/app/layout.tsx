@@ -5,6 +5,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "InterviewAI",
   description: "AI-Powered Interview Preparation",
+  icons: {
+    icon:"/icon.png"
+  },
 };
 
 export default function RootLayout({

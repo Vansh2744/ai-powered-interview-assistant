@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { SignOutButton, UserButton, useAuth } from "@clerk/nextjs";
+import Image from "next/image";
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
@@ -35,8 +36,10 @@ export default function Navbar() {
     <nav className={`navbar${scrolled ? " scrolled" : ""}`} ref={menuRef}>
       <div className="nav-inner">
         <Link href="/" className="nav-logo">
-          <span className="logo-dot" />
-          InterviewAI
+          <div className="flex gap-2">
+            <Image src="/logo.png" alt="Logo" width={32} height={32} />
+            <span>InterviewAI</span>
+          </div>
         </Link>
 
         <ul className="nav-links">
