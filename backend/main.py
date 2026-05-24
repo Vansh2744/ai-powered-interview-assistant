@@ -15,9 +15,7 @@ from services.embeddings import get_embeddings
 from services.chunks import split_text_into_chunks
 from services.vector_store import create_collection
 import uuid
-from db.schemas import SearchQuery
-from services.embeddings import get_query_embedding
-from services.vector_store import query_collection
+from db.schemas import UserCreate
 from routers.interview_ws import router as interview_router
 import json
 import os
@@ -61,9 +59,13 @@ async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
     return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {str(exc)}"})
 
-class UserCreate(BaseModel):
-    clerk_id: str
-    email: str
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    try:
+        count = db.query(User).count()
+        return {"status": "ok", "user_count": count}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @app.post("/users")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -214,10 +216,39 @@ def get_history(payload: dict = Depends(get_current_user), db: Session = Depends
         })
     return result
 
-@app.get("/health")
-def health(db: Session = Depends(get_db)):
-    try:
-        count = db.query(User).count()
-        return {"status": "ok", "user_count": count}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
+@app.delete("/files/{file_id}")
+def delete_file(
+    file_id: int,
+    payload: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    file = db.query(UploadedFiles).filter(
+        UploadedFiles.id == file_id,
+        UploadedFiles.user_clerk_id == payload["sub"],
+    ).first()
+
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    db.delete(file)
+    db.commit()
+    return {"message": "File deleted"}
+
+
+@app.delete("/history/{session_id}")
+def delete_session(
+    session_id: int,
+    payload: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = db.query(InterviewSession).filter(
+        InterviewSession.id == session_id,
+        InterviewSession.user_clerk_id == payload["sub"],
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    db.delete(session)
+    db.commit()
+    return {"message": "Session deleted"}

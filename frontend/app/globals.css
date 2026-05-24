@@ -923,6 +923,8 @@ footer span {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .dash-avatar {
@@ -937,7 +939,7 @@ footer span {
   font-size: 1.375rem;
   font-weight: 800;
   color: #fff;
-  flex-shrink: 0;
+  flex-shrink: 0; 
   box-shadow: 0 8px 24px rgba(79, 142, 247, 0.25);
 }
 
@@ -950,17 +952,22 @@ footer span {
 
 .dash-title {
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: clamp(0.875rem, 2.5vw, 1.25rem);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .dash-header__stats {
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  flex-shrink: 0;
 }
 
 .dash-stat {
@@ -991,6 +998,48 @@ footer span {
   width: 1px;
   height: 32px;
   background: var(--border);
+}
+
+@media (max-width: 640px) {
+  .dash-header {
+    padding: 1.25rem;
+    gap: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dash-header__left {
+    width: 100%;
+  }
+
+  .dash-avatar {
+    width: 42px;
+    height: 42px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+  }
+
+  .dash-title {
+    font-size: clamp(
+      0.8rem,
+      4vw,
+      1rem
+    );
+  }
+
+  .dash-header__stats {
+    width: 100%;
+    justify-content: space-around;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .dash-stat__value {
+    font-size: 0.95rem;
+  }
+  .dash-stat__label {
+    font-size: 0.65rem;
+  }
 }
 
 .dashboard-body {
@@ -2330,4 +2379,73 @@ footer span {
     font-size: 0.75rem;
     border-radius: 10px;
   }
+}
+
+.file-card__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.file-card__btn {
+  flex: 1;
+}
+
+.file-card__delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.06);
+  color: #f87171;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.file-card__delete-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.file-card__delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.history-card__row-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.history-card__row {
+  flex: 1;
+}
+
+.history-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-right: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.06);
+  color: #f87171;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.history-delete-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.14);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.history-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
